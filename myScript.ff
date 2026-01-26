@@ -1,0 +1,15 @@
+num secret = 7
+num attempts = 3
+out **Welcome to the Guessing Game!**
+
+while attempts > 0 do
+    out You have <attempts> guesses left.
+    in guess = Pick a number (0-10):
+    
+    if guess = secret do out **YOU WIN!**
+    if guess = secret do stop
+    
+    attempts -= 1
+    if attempts = 0 do out **GAME OVER. The number was 7.**
+
+out Thanks for playing Firefly!
