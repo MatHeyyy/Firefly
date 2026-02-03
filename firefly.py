@@ -3,10 +3,14 @@
 # The Official Release
 # @author Matei Costinescu
 
-import sys
 import os
 
 variables = {}
+
+# Status constants
+STATUS_NEXT = "NEXT"
+STATUS_STOP = "STOP"
+STATUS_REPEAT = "REPEAT"
 
 def get_indent(line):
     # Convert tabs to spaces to be safe and count indentation
@@ -31,9 +35,9 @@ def evaluate_expression(expr):
 
 def run_line(line):
     line = line.strip()
-    if not line or line.startswith("#"): return "NEXT"
-    if line == "stop": return "STOP"
-    if line == "repeat": return "REPEAT"
+    if not line or line.startswith("#"): return STATUS_NEXT
+    if line == "stop": return STATUS_STOP
+    if line == "repeat": return STATUS_REPEAT
 
     # INPUT
     if line.startswith("in "):
@@ -44,7 +48,7 @@ def run_line(line):
             val = input(prompt + " ")
             try: variables[var_name] = int(val)
             except: variables[var_name] = val
-        return "NEXT"
+        return STATUS_NEXT
 
     # MATH SHORTCUTS
     if " += " in line:
@@ -57,10 +61,10 @@ def run_line(line):
     # ASSIGNMENT
     if " = " in line and not line.startswith("if "):
         parts = line.split(" = ", 1)
-        name = parts[0].split()[-1] 
+        name = parts[0].strip()
         result = evaluate_expression(parts[1].strip())
         variables[name] = result if result is not None else parts[1].strip()
-        return "NEXT"
+        return STATUS_NEXT
 
     # OUTPUT
     if line.startswith("out "):
@@ -68,11 +72,11 @@ def run_line(line):
         for var, val in variables.items():
             content = content.replace(f"<{var}>", str(val))
         if content.startswith("**") and content.endswith("**"):
-            print("\033[1m" + content.replace("**", "") + "\033[0m")
+            print("\033[1m" + content[2:-2] + "\033[0m")
         else:
             print(content)
-        return "NEXT"
-    
+        return STATUS_NEXT
+
     # IF STATEMENTS
     if line.startswith("if "):
         if " do " in line:
@@ -80,15 +84,15 @@ def run_line(line):
             condition = parts[0].strip()
             action = parts[1].strip()
         else:
-            condition = line[3:] 
-            action = "" 
+            condition = line[3:].strip()
+            action = ""
 
         if evaluate_expression(condition):
-            return run_line(action)
+            return run_line(action) if action else STATUS_NEXT
 
-    return "NEXT"
+    return STATUS_NEXT
 
-def runFile(filename):
+def run_file(filename):
     if not os.path.exists(filename):
         print(f"Error: '{filename}' not found.")
         return
@@ -132,24 +136,17 @@ def runFile(filename):
             
             # Execute Loop
             pc = block_pc 
-            loop_active = True
-            
-            while loop_active:
-                result = evaluate_expression(condition_str)
-                if not result:
-                    loop_active = False
-                    break
 
+            while evaluate_expression(condition_str):
                 for bl in block_lines:
                     status = run_line(bl)
-                    if status == "STOP":
-                        loop_active = False
+                    if status == STATUS_STOP:
+                        return
+                    if status == STATUS_REPEAT:
                         break
-                    if status == "REPEAT":
-                        break 
         else:
             run_line(stripped)
             pc += 1
 
 # Start the Engine
-runFile('myScript.ff')
+run_file('myScript.ff')
