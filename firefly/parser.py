@@ -53,9 +53,13 @@ def parse_assignment(line):
 
 
 def parse_output_statement(line):
-    """Parse an output statement (out ...)"""
-    content = line[4:]
-    return ("output", content)
+    """Parse an output statement (out ... or out styled ...)"""
+    if line.startswith("out styled "):
+        content = line[11:]  # Skip "out styled "
+        return ("output", content, True)  # True indicates styling should be applied
+    else:
+        content = line[4:]  # Skip "out "
+        return ("output", content, False)  # False indicates no styling
 
 
 def parse_if_statement(line):

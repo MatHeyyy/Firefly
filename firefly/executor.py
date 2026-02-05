@@ -53,15 +53,31 @@ def execute_line(line, variables):
     # OUTPUT - check before assignment so "out x = 5" isn't treated as assignment
     if line.startswith("out "):
         parsed = parse_output_statement(line)
-        content = parsed[1]  # Second element of tuple ("output", content)
+        content = parsed[1]  # Second element of tuple
+        apply_styling = parsed[2] if len(parsed) > 2 else False  # Third element indicates styling
+
         # Sort by longest variable name first to avoid partial replacements
         for var in sorted(variables.keys(), key=len, reverse=True):
             val = variables[var]
             content = content.replace(f"<{var}>", str(val))
-        if content.startswith("**") and content.endswith("**"):
-            print("\033[1m" + content[2:-2] + "\033[0m")
-        else:
+
+        # Apply styling if requested
+        if apply_styling:
+            # Process inline styling markers
+            import re
+
+            # Replace **text** with bold
+            content = re.sub(r'\*\*(.+?)\*\*', r'\033[1m\1\033[22m', content)
+
+            # Replace //text// with italic
+            content = re.sub(r'//(.+?)//', r'\033[3m\1\033[23m', content)
+
             print(content)
+        else:
+            # Plain output without styling
+            print(content)
+
+
         return STATUS_NEXT
 
     # ASSIGNMENT
