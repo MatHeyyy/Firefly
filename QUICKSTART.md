@@ -2,17 +2,27 @@
 
 ## Running Your Scripts
 
-### Option 1: Run the Default Script
+### Option 1: Run a Custom Script
+```bash
+python3 main.py myScript.ff
+```
+This runs `myScript.ff`. Make sure the file exists in the same directory or provide the full path.
+
+### Option 2: Interactive REPL Mode
 ```bash
 python3 main.py
 ```
-This runs `myScript.ff` - the guessing game.
+You can also use REPL mode to run Firefly commands interactively.
 
-### Option 2: Run a Custom Script
-```bash
-python3 main.py otherScript.ff
+```plain
+Firefly v1.0 Interactive Mode
+Type 'exit' to quit.
+------------------------------
+firefly>> num x = 10
+firefly>> x += 5
+firefly>> out <x>
+15
 ```
-This runs `otherScript.ff` instead. Make sure the file exists in the same directory or provide the full path.
 
 ### Option 3: Use Programmatically
 ```python
@@ -36,7 +46,11 @@ x = 42                  # Works without type prefix too
 ```firefly
 in name = What is your name?
 out Hello <name>!
-out **Bold message**    # Text between ** is bold
+
+# Text styling (use "out styled" to enable styling)
+out This **will not** be //styled//              # Plain output shows markers as-is
+out styled This **will** be //styled//           # Bold and italic applied
+out styled **Bold** and //italic// and normal    # Mix styles in one line
 ```
 
 ### Math Operations
@@ -91,7 +105,7 @@ num x = 5  # Inline comment
 
 Save this as `example.ff`:
 ```firefly
-out **Welcome to the Number Game!**
+out styled **Welcome to the Number Game!**
 
 num secret = 7
 num attempts = 3
@@ -100,11 +114,11 @@ while attempts > 0 do
     out You have <attempts> attempts left.
     in guess = Guess the number (1-10):
     
-    if guess = secret do out **Correct! You win!**
+    if guess = secret do out styled **Correct! You win!**
     if guess = secret do stop
     
-    if guess > secret do out Too high!
-    if guess < secret do out Too low!
+    if guess > secret do out styled Too //high//!
+    if guess < secret do out styled Too //low//!
     
     attempts -= 1
     if attempts = 0 do out Sorry, game over. The number was <secret>.
@@ -114,8 +128,7 @@ out Thanks for playing!
 
 Then run it:
 ```bash
-# Edit main.py to use 'example.ff' instead of 'myScript.ff'
-python3 main.py
+python3 main.py example.ff
 ```
 
 ## Project Structure
@@ -129,8 +142,9 @@ firefly/                 # Package directory
 ├── executor.py         # Executes statements
 └── interpreter.py      # Main interpreter class
 
-main.py                 # Entry point - EDIT THIS TO RUN DIFFERENT SCRIPTS
+main.py                 # Entry point - accepts script filename as argument
 myScript.ff             # Sample guessing game
+example.ff              # Your custom scripts
 ```
 
 ## Troubleshooting
