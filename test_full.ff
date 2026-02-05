@@ -1,0 +1,12 @@
+num sum = 0
+num x = 10
+
+out **Test Script**
+out Initial value of x = <x>
+out we will add 5 to x and store the result in sum
+
+sum = x + 5
+out After calculation sum is <sum>
+
+if sum > 14 do out **Sum is greater than 14!**
+    out **Done**

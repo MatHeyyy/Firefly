@@ -12,4 +12,4 @@ while attempts > 0 do
     attempts -= 1
     if attempts = 0 do out **GAME OVER. The number was 7.**
 
-out Thanks for playing Firefly!
+out Thanks for playing with Firefly!
