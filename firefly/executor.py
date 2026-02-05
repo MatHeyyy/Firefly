@@ -49,24 +49,26 @@ def execute_line(line, variables):
         _, var, op, val = parsed
         return execute_line(f"{var} = {var} {op} {val}", variables)
 
+    # OUTPUT - check before assignment so "out x = 5" isn't treated as assignment
+    if line.startswith("out "):
+        parsed = parse_output_statement(line)
+        content = parsed[1]  # Second element of tuple ("output", content)
+        # Sort by longest variable name first to avoid partial replacements
+        for var in sorted(variables.keys(), key=len, reverse=True):
+            val = variables[var]
+            content = content.replace(f"<{var}>", str(val))
+        if content.startswith("**") and content.endswith("**"):
+            print("\033[1m" + content[2:-2] + "\033[0m")
+        else:
+            print(content)
+        return STATUS_NEXT
+
     # ASSIGNMENT
     parsed = parse_assignment(line)
     if parsed:
         _, name, value = parsed
         result = evaluate_expression(value, variables)
         variables[name] = result if result is not None else value
-        return STATUS_NEXT
-
-    # OUTPUT
-    if line.startswith("out "):
-        parsed = parse_output_statement(line)
-        content = parsed[1]  # Second element of tuple ("output", content)
-        for var, val in variables.items():
-            content = content.replace(f"<{var}>", str(val))
-        if content.startswith("**") and content.endswith("**"):
-            print("\033[1m" + content[2:-2] + "\033[0m")
-        else:
-            print(content)
         return STATUS_NEXT
 
     # IF STATEMENTS

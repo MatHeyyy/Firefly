@@ -12,17 +12,22 @@ def evaluate_expression(expr, variables):
     Returns:
         The result of the expression, or None if evaluation fails
     """
-    # 1. Replace variables (Longest names first to avoid partial matches)
+    #Replace variables (Longest names first to avoid partial matches)
     for var in sorted(variables.keys(), key=len, reverse=True):
         if var in expr:
             val = str(variables[var])
             expr = expr.replace(var, val)
 
-    # 2. Fix Logic Syntax (single = becomes == for comparison)
+     #Fix Logic Syntax (single = becomes == for comparison)
     if "=" in expr and "==" not in expr and "<=" not in expr and ">=" not in expr:
         expr = expr.replace("=", "==")
 
     try:
-        return eval(expr)
-    except:
+        #Evaluate with no builtins
+        result = eval(expr, {"__builtins__": {}}, {})
+        #Only allow simple types (int, float, str, bool) to be returned
+        if isinstance(result, (int, float, str, bool)):
+            return result
+        return None
+    except Exception:
         return None

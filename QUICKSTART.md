@@ -9,12 +9,10 @@ python3 main.py
 This runs `myScript.ff` - the guessing game.
 
 ### Option 2: Run a Custom Script
-Edit `main.py` to change the filename:
-```python
-def main():
-    interpreter = FireflyInterpreter()
-    interpreter.run_file('your_script.ff')  # Change this line
+```bash
+python3 main.py otherScript.ff
 ```
+This runs `otherScript.ff` instead. Make sure the file exists in the same directory or provide the full path.
 
 ### Option 3: Use Programmatically
 ```python
