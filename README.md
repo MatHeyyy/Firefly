@@ -5,17 +5,21 @@ A custom programming language interpreter built in Python.
 ## Quick Start
 
 ```bash
-python3 main.py
+python3 main.py yourScript.ff
 ```
 
-This runs `myScript.ff` - a number guessing game example.
+This runs `yourScript.ff`. Omit the filename to run `myScript.ff` (a number guessing game example).
 
 ## Basic Usage
 
 ### Run a Script
-Edit `main.py` and change the filename to run your script:
 ```bash
-python3 main.py yourScript.ff
+python3 main.py script.ff
+```
+
+### Run in REPL Mode
+```bash
+python3 main.py
 ```
 
 ### Use as a Library
@@ -35,6 +39,9 @@ See [QUICKSTART.md](QUICKSTART.md) for complete syntax reference.
 num x = 10
 x += 5
 out The result is <x>
+
+# With text styling
+out styled The result is **<x>** units!
 ```
 
 ## Project Structure
@@ -45,17 +52,28 @@ firefly/              # Main package
 ├── executor.py      # Statement execution
 ├── parser.py        # Syntax parsing
 ├── evaluator.py     # Expression evaluation
+├── errors.py        # Custom exception classes
 └── utils.py         # Helper functions
 
 main.py              # Entry point
 ```
+
+## Features
+
+- **Simple Syntax** - Easy-to-learn language for beginners
+- **Interactive REPL** - Test code interactively
+- **Comprehensive Error Handling** - Clear error messages with line numbers
+- **Type Safety** - Built-in type checking and validation
+- **Infinite Loop Protection** - Automatic detection of runaway loops
 
 ## Documentation
 
 - **[QUICKSTART.md](QUICKSTART.md)** - Language syntax and examples
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** - Code structure and adding features
 
-## Files
+## Example Scripts
 
-- `myScript.ff` - Example guessing game script
+- `myScript.ff` - Number guessing game
+- `test_comprehensive.ff` - Comprehensive language feature tests
+- `test_full.ff` - Full feature test suite
 
