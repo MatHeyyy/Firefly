@@ -1,0 +1,50 @@
+# Comprehensive test suite for Firefly
+
+out **Test 1: Variable assignment and output**
+num x = 10
+out x is <x>
+
+out **Test 2: Math operations**
+num y = x + 5
+out y is <y>
+
+out **Test 3: Math shortcuts**
+x += 3
+out x after += is <x>
+x -= 2
+out x after -= is <x>
+
+out **Test 4: If statements**
+if x == 11 do out Correct: x is 11
+if x == 10 do out Wrong: x should be 11
+
+out **Test 5: If-else chain**
+num z = 20
+if z < 10 do
+    out Wrong: z < 10
+else if z == 20 do
+    out Correct: z is 20
+else
+    out Wrong: z fallthrough
+
+out **Test 6: Nested if in for loop**
+for i in 1 to 3 do
+    if i == 2 do
+        out Found 2 in for loop
+
+out **Test 7: While loop**
+num counter = 0
+while counter < 3 do
+    out Counter: <counter>
+    counter += 1
+
+out **Test 8: Variable with partial name match**
+num ab = 5
+num abc = 10
+out ab=<ab> abc=<abc>
+
+out **Test 9: Expression evaluation**
+num result = ab + abc
+out result is <result>
+
+out **All tests complete**

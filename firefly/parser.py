@@ -22,11 +22,15 @@ def parse_input_statement(line):
 
 def parse_math_shortcut(line):
     """Parse math shortcuts (+= and -=)"""
+    # Don't match if line starts with keywords that might contain += or -=
+    if line.startswith("out ") or line.startswith("if ") or line.startswith("in "):
+        return None
+
     if " += " in line:
-        var, val = line.split(" += ")
+        var, val = line.split(" += ", 1)
         return ("math_shortcut", var.strip(), "+", val.strip())
     elif " -= " in line:
-        var, val = line.split(" -= ")
+        var, val = line.split(" -= ", 1)
         return ("math_shortcut", var.strip(), "-", val.strip())
     return None
 

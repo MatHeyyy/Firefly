@@ -188,6 +188,18 @@ def _execute_block(raw_lines, variables, parent_indent):
             if result is None:
                 return STATUS_STOP
             pc = result
+        # Handle nested for loops
+        elif stripped.startswith("for "):
+            result = _execute_nested_for(raw_lines, pc, variables)
+            if result is None:
+                return STATUS_STOP
+            pc = result
+        # Handle nested while loops
+        elif stripped.startswith("while "):
+            result = _execute_nested_while(raw_lines, pc, variables)
+            if result is None:
+                return STATUS_STOP
+            pc = result
         else:
             status = execute_line(stripped, variables)
             if status == STATUS_STOP:
@@ -316,6 +328,103 @@ def _execute_nested_if(lines, start_pc, variables):
             break
 
     return pc
+
+
+def _execute_nested_for(lines, start_pc, variables):
+    """Execute a nested for loop within a block.
+
+    Returns the next line index after the loop, or None on stop.
+    """
+    line = lines[start_pc]
+    stripped = line.strip()
+    base_indent = get_indent(line)
+
+    # Parse the for loop
+    from .parser import parse_for_block as parse_for_line
+    # We need to reconstruct full lines for the parser
+    temp_lines = [line]
+    pc = start_pc + 1
+    while pc < len(lines):
+        temp_lines.append(lines[pc])
+        pc += 1
+
+    # Parse using the for block parser
+    loop_var, iterable, _, _ = parse_for_line(temp_lines, 0)
+
+    # Collect the nested block
+    nested_block = []
+    block_pc = start_pc + 1
+    while block_pc < len(lines):
+        next_line = lines[block_pc]
+        if not next_line.strip():
+            block_pc += 1
+            continue
+        if get_indent(next_line) > base_indent:
+            nested_block.append(next_line)
+            block_pc += 1
+        else:
+            break
+
+    # Evaluate the iterable
+    try:
+        iter_obj = eval(iterable, {}, variables)
+    except Exception:
+        iter_obj = []
+
+    # Execute the loop
+    for value in iter_obj:
+        variables[loop_var] = value
+        result = _execute_block(nested_block, variables, base_indent)
+        if result == STATUS_STOP:
+            return None
+
+    return block_pc
+
+
+def _execute_nested_while(lines, start_pc, variables):
+    """Execute a nested while loop within a block.
+
+    Returns the next line index after the loop, or None on stop.
+    """
+    line = lines[start_pc]
+    stripped = line.strip()
+    base_indent = get_indent(line)
+
+    # Parse the while loop condition
+    from .parser import parse_while_block as parse_while_line
+    # We need to reconstruct full lines for the parser
+    temp_lines = [line]
+    pc = start_pc + 1
+    while pc < len(lines):
+        temp_lines.append(lines[pc])
+        pc += 1
+
+    # Parse using the while block parser
+    condition_str, _, _ = parse_while_line(temp_lines, 0)
+
+    # Collect the nested block
+    nested_block = []
+    block_pc = start_pc + 1
+    while block_pc < len(lines):
+        next_line = lines[block_pc]
+        if not next_line.strip():
+            block_pc += 1
+            continue
+        if get_indent(next_line) > base_indent:
+            nested_block.append(next_line)
+            block_pc += 1
+        else:
+            break
+
+    # Execute the loop
+    while evaluate_expression(condition_str, variables):
+        result = _execute_block(nested_block, variables, base_indent)
+        if result == STATUS_STOP:
+            return None
+        if result == STATUS_REPEAT:
+            continue
+
+    return block_pc
 
 
 def execute_if_block(lines, start_pc, variables):
