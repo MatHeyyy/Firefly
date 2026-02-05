@@ -1,6 +1,8 @@
-num a = 0
+num a = 5
 
 out **Test Script**
-for a in 0 to 10
-    out <a>
-    a = a + 1
+for i in 0 to 10 do
+    out <i>
+    if i == a do
+        out **Found a**
+        stop

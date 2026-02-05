@@ -56,14 +56,32 @@ def parse_output_statement(line):
 
 def parse_if_statement(line):
     """Parse an if statement"""
+    # Handle "if condition do action" (inline action)
     if " do " in line:
         parts = line[3:].split(" do ", 1)
         condition = parts[0].strip()
         action = parts[1].strip()
+    # Handle "if condition do" (block-style, no inline action)
+    elif line.endswith(" do"):
+        condition = line[3:-3].strip()
+        action = ""
     else:
         condition = line[3:].strip()
         action = ""
     return ("if", condition, action)
+
+def parse_else_statement(line):
+    """
+    Parse an else statement while keeping it dynamic
+    for example "else do", "else if", "else for", "else while" or just "else"
+    """
+    stripped = line.strip()
+    if stripped.startswith("else "):
+        return stripped[5:].strip()  # Return the part after "else "
+    elif stripped == "else":
+        return ""  # Just "else" with no additional keywords
+    else:
+        return None  # Not an else statement
 
 
 def parse_while_block(lines, start_pc):
