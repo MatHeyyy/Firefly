@@ -52,10 +52,19 @@ firefly/              # Main package
 ├── executor.py      # Statement execution
 ├── parser.py        # Syntax parsing
 ├── evaluator.py     # Expression evaluation
+├── errors.py        # Custom exception classes
 └── utils.py         # Helper functions
 
 main.py              # Entry point
 ```
+
+## Features
+
+- **Simple Syntax** - Easy-to-learn language for beginners
+- **Interactive REPL** - Test code interactively
+- **Comprehensive Error Handling** - Clear error messages with line numbers
+- **Type Safety** - Built-in type checking and validation
+- **Infinite Loop Protection** - Automatic detection of runaway loops
 
 ## Documentation
 

@@ -1,7 +1,7 @@
 """Parser for Firefly script syntax"""
 
-from .evaluator import evaluate_expression
 from .utils import get_indent
+from .errors import FireflySyntaxError, FireflyIndentationError
 
 
 # Status constants
@@ -12,12 +12,20 @@ STATUS_REPEAT = "REPEAT"
 
 def parse_input_statement(line):
     """Parse an input statement (in var = prompt)"""
-    if " = " in line:
-        parts = line[3:].split(" = ", 1)
-        var_name = parts[0].strip()
-        prompt = parts[1].strip()
-        return ("input", var_name, prompt)
-    return None
+    if " = " not in line:
+        raise FireflySyntaxError(f"Invalid input statement syntax: '{line}'. Expected 'in var = prompt'")
+
+    parts = line[3:].split(" = ", 1)
+    if len(parts) != 2:
+        raise FireflySyntaxError(f"Invalid input statement syntax: '{line}'. Expected 'in var = prompt'")
+
+    var_name = parts[0].strip()
+    prompt = parts[1].strip()
+
+    if not var_name:
+        raise FireflySyntaxError(f"Variable name cannot be empty in input statement: '{line}'")
+
+    return ("input", var_name, prompt)
 
 
 def parse_math_shortcut(line):
@@ -138,6 +146,10 @@ def parse_for_block(lines, start_pc):
 
     Returns:
         (loop_var, iterable, block_lines, next_pc)
+
+    Raises:
+        FireflySyntaxError: If the for loop syntax is invalid
+        FireflyIndentationError: If the block is not properly indented
     """
     line = lines[start_pc]
     stripped = line.strip()
@@ -147,20 +159,27 @@ def parse_for_block(lines, start_pc):
     if raw_content.endswith(" do"):
         raw_content = raw_content[:-3].strip()
 
-    if " in " in raw_content:
-        loop_var, iterable = raw_content.split(" in ", 1)
-        loop_var = loop_var.strip()
-        iterable = iterable.strip()
+    if " in " not in raw_content:
+        raise FireflySyntaxError(f"Invalid for loop syntax: '{stripped}'. Expected 'for var in iterable do'")
 
-        # Convert "0 to 10" syntax to range(0, 11)
-        if " to " in iterable:
-            parts = iterable.split(" to ")
-            if len(parts) == 2:
-                start = parts[0].strip()
-                end = parts[1].strip()
-                iterable = f"range({start}, {end} + 1)"
-    else:
-        raise ValueError(f"Invalid for loop syntax: {line}")
+    loop_var, iterable = raw_content.split(" in ", 1)
+    loop_var = loop_var.strip()
+    iterable = iterable.strip()
+
+    if not loop_var:
+        raise FireflySyntaxError(f"Loop variable cannot be empty in for loop: '{stripped}'")
+    if not iterable:
+        raise FireflySyntaxError(f"Iterable cannot be empty in for loop: '{stripped}'")
+
+    # Convert "0 to 10" syntax to range(0, 11)
+    if " to " in iterable:
+        parts = iterable.split(" to ")
+        if len(parts) == 2:
+            start = parts[0].strip()
+            end = parts[1].strip()
+            iterable = f"range({start}, {end} + 1)"
+        else:
+            raise FireflySyntaxError(f"Invalid 'to' syntax in for loop: '{stripped}'")
 
     # Capture Block
     base_indent = get_indent(line)
@@ -179,5 +198,8 @@ def parse_for_block(lines, start_pc):
             block_pc += 1
         else:
             break
+
+    if not block_lines:
+        raise FireflyIndentationError(f"For loop at line {start_pc + 1} has no indented block")
 
     return loop_var, iterable, block_lines, block_pc
