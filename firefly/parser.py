@@ -104,3 +104,54 @@ def parse_while_block(lines, start_pc):
             break
 
     return condition_str, block_lines, block_pc
+
+def parse_for_block(lines, start_pc):
+    """
+    Parse a for loop block and return the loop variable, iterable, block lines, and next PC.
+    example line: for i in 0 to 5 do
+
+    Returns:
+        (loop_var, iterable, block_lines, next_pc)
+    """
+    line = lines[start_pc]
+    stripped = line.strip()
+
+    # Extract Loop Variable and Iterable
+    raw_content = stripped[4:]
+    if raw_content.endswith(" do"):
+        raw_content = raw_content[:-3].strip()
+
+    if " in " in raw_content:
+        loop_var, iterable = raw_content.split(" in ", 1)
+        loop_var = loop_var.strip()
+        iterable = iterable.strip()
+
+        # Convert "0 to 10" syntax to range(0, 11)
+        if " to " in iterable:
+            parts = iterable.split(" to ")
+            if len(parts) == 2:
+                start = parts[0].strip()
+                end = parts[1].strip()
+                iterable = f"range({start}, {end} + 1)"
+    else:
+        raise ValueError(f"Invalid for loop syntax: {line}")
+
+    # Capture Block
+    base_indent = get_indent(line)
+    block_lines = []
+    block_pc = start_pc + 1
+
+    while block_pc < len(lines):
+        next_line = lines[block_pc]
+        if not next_line.strip():
+            block_pc += 1
+            continue
+
+        next_indent = get_indent(next_line)
+        if next_indent > base_indent:
+            block_lines.append(next_line)
+            block_pc += 1
+        else:
+            break
+
+    return loop_var, iterable, block_lines, block_pc

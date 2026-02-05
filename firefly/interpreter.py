@@ -1,7 +1,7 @@
 """Main interpreter for Firefly scripts"""
 
 import os
-from .executor import execute_line, execute_while_block
+from .executor import execute_line, execute_while_block, execute_for_block
 from .parser import STATUS_STOP
 
 
@@ -33,6 +33,11 @@ class FireflyInterpreter:
             # WHILE LOOP LOGIC
             if stripped.startswith("while "):
                 result = execute_while_block(lines, pc, self.variables)
+                if result is None:
+                    return  # Stop execution
+                pc = result
+            elif stripped.startswith("for "):
+                result = execute_for_block(lines, pc, self.variables)
                 if result is None:
                     return  # Stop execution
                 pc = result

@@ -70,10 +70,15 @@ if attempts = 0 do stop
 
 ### Loops
 ```firefly
+# While loop example
 while attempts > 0 do
     out Attempts left: <attempts>
     in guess = Guess:
     attempts -= 1
+    
+# For loop example
+for i in 1 to 5 do
+    out Number: <i>
 ```
 
 ### Comments

@@ -3,7 +3,7 @@
 from .parser import (
     STATUS_NEXT, STATUS_STOP, STATUS_REPEAT,
     parse_input_statement, parse_math_shortcut, parse_assignment,
-    parse_output_statement, parse_if_statement, parse_while_block
+    parse_output_statement, parse_if_statement, parse_while_block, parse_for_block
 )
 from .evaluator import evaluate_expression
 
@@ -77,8 +77,6 @@ def execute_line(line, variables):
         if evaluate_expression(condition, variables):
             return execute_line(action, variables) if action else STATUS_NEXT
 
-    return STATUS_NEXT
-
 
 def execute_while_block(lines, start_pc, variables):
     """
@@ -103,3 +101,34 @@ def execute_while_block(lines, start_pc, variables):
                 break
 
     return next_pc
+
+def execute_for_block(lines, start_pc, variables):
+    """Execute a for loop block.
+
+    Args:
+        lines: List of all lines in the file
+        start_pc: Program counter at the for statement
+        variables: Dictionary of variables
+
+    Returns:
+        Next program counter position or None if stopped
+    """
+    loop_var, iterable, block_lines, next_pc = parse_for_block(lines, start_pc)
+
+    # Evaluate the iterable expression (e.g., range(1, 5))
+    try:
+        iter_obj = eval(iterable, {}, variables)
+    except Exception:
+        iter_obj = []
+
+    for value in iter_obj:
+        variables[loop_var] = value
+        for bl in block_lines:
+            status = execute_line(bl, variables)
+            if status == STATUS_STOP:
+                return None
+            if status == STATUS_REPEAT:
+                break
+
+    return next_pc
+
