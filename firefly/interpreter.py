@@ -3,11 +3,12 @@
 import os
 import sys
 from .executor import execute_line, execute_while_block, execute_for_block, execute_if_block
-from .parser import STATUS_STOP
+from .parser import STATUS_STOP, parse_function_definition
 from .errors import (
     FireflyError, FireflySyntaxError, FireflyRuntimeError,
     FireflyVariableError, FireflyFileError
 )
+from .utils import get_indent
 
 
 class FireflyInterpreter:
@@ -15,6 +16,7 @@ class FireflyInterpreter:
 
     def __init__(self):
         self.variables = {}
+        self.functions = {}
 
     def run_file(self, filename):
         """
@@ -58,26 +60,55 @@ class FireflyInterpreter:
                 line = lines[pc]
                 stripped = line.strip()
 
+                # FUNCTION DEFINITION
+                if stripped.startswith("function "):
+                    func_name, arg_names = parse_function_definition(stripped)
+
+                    # Collect the function body
+                    base_indent = get_indent(line)
+                    body_lines = []
+                    block_pc = pc + 1
+
+                    while block_pc < len(lines):
+                        next_line = lines[block_pc]
+                        if not next_line.strip():
+                            block_pc += 1
+                            continue
+                        if get_indent(next_line) > base_indent:
+                            # Store with indentation intact (raw line)
+                            body_lines.append(next_line)
+                            block_pc += 1
+                        else:
+                            break
+
+                    # Store the function
+                    self.functions[func_name] = {
+                        "args": arg_names,
+                        "body": body_lines,
+                        "base_indent": base_indent
+                    }
+
+                    pc = block_pc
                 # IF / ELSE CHAINS
-                if stripped.startswith("if "):
-                    result = execute_if_block(lines, pc, self.variables)
+                elif stripped.startswith("if "):
+                    result = execute_if_block(lines, pc, self.variables, self.functions)
                     if result is None:
                         return
                     pc = result
                 # WHILE LOOP LOGIC
                 elif stripped.startswith("while "):
-                    result = execute_while_block(lines, pc, self.variables)
+                    result = execute_while_block(lines, pc, self.variables, self.functions)
                     if result is None:
                         return  # Stop execution
                     pc = result
                 # FOR LOOP LOGIC
                 elif stripped.startswith("for "):
-                    result = execute_for_block(lines, pc, self.variables)
+                    result = execute_for_block(lines, pc, self.variables, self.functions)
                     if result is None:
                         return  # Stop execution
                     pc = result
                 else:
-                    status = execute_line(stripped, self.variables, pc + 1)
+                    status = execute_line(stripped, self.variables, pc + 1, self.functions)
                     if status == STATUS_STOP:
                         return
                     pc += 1
@@ -109,7 +140,7 @@ class FireflyInterpreter:
                     break
 
                 # Execute the single line
-                status = execute_line(code, self.variables)
+                status = execute_line(code, self.variables, functions=self.functions)
 
                 # Handle the stop command
                 if status == STATUS_STOP:

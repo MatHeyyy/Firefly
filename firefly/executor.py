@@ -4,14 +4,15 @@ import re
 from .parser import (
     STATUS_NEXT, STATUS_STOP, STATUS_REPEAT,
     parse_input_statement, parse_math_shortcut, parse_assignment,
-    parse_output_statement, parse_if_statement, parse_while_block, parse_for_block
+    parse_output_statement, parse_if_statement, parse_while_block, parse_for_block,
+    parse_function_definition, parse_function_call
 )
 from .evaluator import evaluate_expression
 from .utils import get_indent
 from .errors import FireflyRuntimeError, FireflyVariableError, FireflySyntaxError
 
 
-def execute_line(line, variables, line_number=None):
+def execute_line(line, variables, line_number=None, functions=None):
     """
     Execute a single Firefly line.
 
@@ -19,6 +20,7 @@ def execute_line(line, variables, line_number=None):
         line: The line to execute
         variables: Dictionary of variables to update
         line_number: Optional line number for error reporting
+        functions: Dictionary of user-defined functions
 
     Returns:
         STATUS_NEXT, STATUS_STOP, or STATUS_REPEAT
@@ -27,6 +29,9 @@ def execute_line(line, variables, line_number=None):
         FireflyRuntimeError: If execution fails
         FireflySyntaxError: If the syntax is invalid
     """
+    if functions is None:
+        functions = {}
+
     line = line.strip()
 
     # Skip empty lines and comments
@@ -123,11 +128,95 @@ def execute_line(line, variables, line_number=None):
     if line.startswith("if ") or line.startswith("else"):
         return STATUS_NEXT
 
+    # FUNCTION DEFINITION - handled at interpreter level
+    if line.startswith("function"):
+        return STATUS_NEXT
+
+    # FUNCTION CALL - Try to parse as function call if it looks like one
+    # Check if it's a potential function call (not a known statement type)
+    if not any(line.startswith(kw) for kw in ["in ", "out ", "if ", "while ", "for ", "else", "stop", "repeat"]) and \
+       " = " not in line and " += " not in line and " -= " not in line:
+        # Try to parse as function call
+        func_name, arg_values = parse_function_call(line)
+        if func_name in functions:
+            execute_function(func_name, arg_values, functions, variables, line_number)
+            return STATUS_NEXT
+
     # Unknown statement
     raise FireflySyntaxError(f"Unknown statement: '{line}'", line_number)
 
 
-def execute_while_block(lines, start_pc, variables):
+def execute_function(func_name, arg_values, functions, variables, line_number=None):
+    """
+    Execute a user-defined function.
+
+    Args:
+        func_name: Name of the function to execute
+        arg_values: List of argument values (can be variable names or literals)
+        functions: Dictionary of user-defined functions
+        variables: Dictionary of variables
+        line_number: Optional line number for error reporting
+
+    Returns:
+        None
+
+    Raises:
+        FireflyRuntimeError: If execution fails
+    """
+    if func_name not in functions:
+        raise FireflyRuntimeError(f"Function '{func_name}' is not defined", line_number)
+
+    func_def = functions[func_name]
+    arg_names = func_def["args"]
+    body_lines = func_def["body"]
+    base_indent = func_def.get("base_indent", 0)
+
+    # Validate argument count
+    if len(arg_values) != len(arg_names):
+        raise FireflyRuntimeError(
+            f"Function '{func_name}' expects {len(arg_names)} argument(s), but {len(arg_values)} were provided",
+            line_number
+        )
+
+    # Create a local scope by copying the current variables
+    local_vars = variables.copy()
+
+    # Evaluate and bind arguments
+    for arg_name, arg_value in zip(arg_names, arg_values):
+        arg_value = arg_value.strip()
+        # Check if it's a string literal (quoted)
+        if (arg_value.startswith('"') and arg_value.endswith('"')) or \
+           (arg_value.startswith("'") and arg_value.endswith("'")):
+            # Remove quotes and use as string literal
+            local_vars[arg_name] = arg_value[1:-1]
+        elif arg_value in variables:
+            # It's a variable reference
+            local_vars[arg_name] = variables[arg_value]
+        else:
+            # Try to evaluate it as an expression
+            try:
+                result = evaluate_expression(arg_value, variables, line_number)
+                local_vars[arg_name] = result
+            except (FireflyRuntimeError, FireflyVariableError):
+                # If evaluation fails, treat it as a string literal
+                local_vars[arg_name] = arg_value
+
+    # Execute function body using _execute_block for proper control flow handling
+    try:
+        _execute_block(body_lines, local_vars, base_indent, line_number or 0, functions)
+    except (FireflyRuntimeError, FireflySyntaxError, FireflyVariableError) as e:
+        if e.line_number is None:
+            e.line_number = line_number
+        raise
+
+    # Update variables in the outer scope (for any modifications made inside the function)
+    # This allows side effects but keeps local function parameters local
+    for var in variables:
+        if var in local_vars and var not in arg_names:
+            variables[var] = local_vars[var]
+
+
+def execute_while_block(lines, start_pc, variables, functions=None):
     """
     Execute a while loop block.
 
@@ -135,6 +224,7 @@ def execute_while_block(lines, start_pc, variables):
         lines: List of all lines in the file
         start_pc: Program counter at the while statement
         variables: Dictionary of variables
+        functions: Dictionary of user-defined functions
 
     Returns:
         Next program counter position or None if stopped
@@ -143,6 +233,9 @@ def execute_while_block(lines, start_pc, variables):
         FireflyRuntimeError: If execution fails
         FireflySyntaxError: If the syntax is invalid
     """
+    if functions is None:
+        functions = {}
+
     try:
         condition_str, block_lines, next_pc = parse_while_block(lines, start_pc)
     except Exception as e:
@@ -171,7 +264,7 @@ def execute_while_block(lines, start_pc, variables):
                     start_pc + 1
                 )
 
-            result = _execute_block(raw_block, variables, base_indent, block_start)
+            result = _execute_block(raw_block, variables, base_indent, block_start, functions)
             if result == STATUS_STOP:
                 return None
             if result == STATUS_REPEAT:
@@ -184,13 +277,14 @@ def execute_while_block(lines, start_pc, variables):
     return next_pc
 
 
-def execute_for_block(lines, start_pc, variables):
+def execute_for_block(lines, start_pc, variables, functions=None):
     """Execute a for loop block.
 
     Args:
         lines: List of all lines in the file
         start_pc: Program counter at the for statement
         variables: Dictionary of variables
+        functions: Dictionary of user-defined functions
 
     Returns:
         Next program counter position or None if stopped
@@ -199,6 +293,9 @@ def execute_for_block(lines, start_pc, variables):
         FireflyRuntimeError: If execution fails
         FireflySyntaxError: If the syntax is invalid
     """
+    if functions is None:
+        functions = {}
+
     try:
         loop_var, iterable, block_lines_raw, next_pc = parse_for_block(lines, start_pc)
     except Exception as e:
@@ -231,7 +328,7 @@ def execute_for_block(lines, start_pc, variables):
     try:
         for value in iter_obj:
             variables[loop_var] = value
-            result = _execute_block(raw_block, variables, base_indent, block_start)
+            result = _execute_block(raw_block, variables, base_indent, block_start, functions)
             if result == STATUS_STOP:
                 return None
     except (FireflyRuntimeError, FireflySyntaxError, FireflyVariableError):
@@ -261,7 +358,7 @@ def _collect_block(lines, start_pc):
     return block_lines, pc
 
 
-def _execute_block(raw_lines, variables, parent_indent, start_line_number=0):
+def _execute_block(raw_lines, variables, parent_indent, start_line_number=0, functions=None):
     """Execute a block of lines, handling nested if statements properly.
 
     Args:
@@ -269,6 +366,7 @@ def _execute_block(raw_lines, variables, parent_indent, start_line_number=0):
         variables: Dictionary of variables
         parent_indent: The indentation level of the parent block
         start_line_number: Starting line number for error reporting
+        functions: Dictionary of user-defined functions
 
     Returns:
         STATUS_NEXT, STATUS_STOP, or STATUS_REPEAT
@@ -276,6 +374,9 @@ def _execute_block(raw_lines, variables, parent_indent, start_line_number=0):
     Raises:
         FireflyRuntimeError: If execution fails
     """
+    if functions is None:
+        functions = {}
+
     pc = 0
     while pc < len(raw_lines):
         line = raw_lines[pc]
@@ -289,24 +390,24 @@ def _execute_block(raw_lines, variables, parent_indent, start_line_number=0):
         try:
             # Handle nested if statements
             if stripped.startswith("if "):
-                result = _execute_nested_if(raw_lines, pc, variables, start_line_number)
+                result = _execute_nested_if(raw_lines, pc, variables, start_line_number, functions)
                 if result is None:
                     return STATUS_STOP
                 pc = result
             # Handle nested for loops
             elif stripped.startswith("for "):
-                result = _execute_nested_for(raw_lines, pc, variables, start_line_number)
+                result = _execute_nested_for(raw_lines, pc, variables, start_line_number, functions)
                 if result is None:
                     return STATUS_STOP
                 pc = result
             # Handle nested while loops
             elif stripped.startswith("while "):
-                result = _execute_nested_while(raw_lines, pc, variables, start_line_number)
+                result = _execute_nested_while(raw_lines, pc, variables, start_line_number, functions)
                 if result is None:
                     return STATUS_STOP
                 pc = result
             else:
-                status = execute_line(stripped, variables, current_line_number)
+                status = execute_line(stripped, variables, current_line_number, functions)
                 if status == STATUS_STOP:
                     return STATUS_STOP
                 if status == STATUS_REPEAT:
@@ -323,7 +424,7 @@ def _execute_block(raw_lines, variables, parent_indent, start_line_number=0):
     return STATUS_NEXT
 
 
-def _execute_nested_if(lines, start_pc, variables, start_line_number=0):
+def _execute_nested_if(lines, start_pc, variables, start_line_number=0, functions=None):
     """Execute a nested if/else chain within a block.
 
     Returns the next line index after the if chain, or None on stop.
@@ -331,6 +432,9 @@ def _execute_nested_if(lines, start_pc, variables, start_line_number=0):
     Raises:
         FireflyRuntimeError: If execution fails
     """
+    if functions is None:
+        functions = {}
+
     pc = start_pc
     executed = False
     base_indent = get_indent(lines[start_pc])
@@ -367,14 +471,13 @@ def _execute_nested_if(lines, start_pc, variables, start_line_number=0):
                 if evaluate_expression(condition, variables, current_line_number):
                     executed = True
                     if inline_action:
-                        status = execute_line(inline_action, variables, current_line_number)
+                        status = execute_line(inline_action, variables, current_line_number, functions)
                         if status == STATUS_STOP:
                             return None
-                    else:
-                        for bl in nested_block:
-                            status = execute_line(bl.strip(), variables, current_line_number)
-                            if status == STATUS_STOP:
-                                return None
+                    elif nested_block:
+                        status = _execute_block(nested_block, variables, base_indent, start_line_number + pc, functions)
+                        if status == STATUS_STOP:
+                            return None
                 pc = block_pc
 
             # Handle 'else if' statement
@@ -398,14 +501,13 @@ def _execute_nested_if(lines, start_pc, variables, start_line_number=0):
                 if not executed and evaluate_expression(condition, variables, current_line_number):
                     executed = True
                     if inline_action:
-                        status = execute_line(inline_action, variables, current_line_number)
+                        status = execute_line(inline_action, variables, current_line_number, functions)
                         if status == STATUS_STOP:
                             return None
-                    else:
-                        for bl in nested_block:
-                            status = execute_line(bl.strip(), variables, current_line_number)
-                            if status == STATUS_STOP:
-                                return None
+                    elif nested_block:
+                        status = _execute_block(nested_block, variables, base_indent, start_line_number + pc, functions)
+                        if status == STATUS_STOP:
+                            return None
                 pc = block_pc
 
             # Handle plain 'else'
@@ -431,14 +533,13 @@ def _execute_nested_if(lines, start_pc, variables, start_line_number=0):
                 if not executed:
                     executed = True
                     if inline_action:
-                        status = execute_line(inline_action, variables, current_line_number)
+                        status = execute_line(inline_action, variables, current_line_number, functions)
                         if status == STATUS_STOP:
                             return None
-                    else:
-                        for bl in nested_block:
-                            status = execute_line(bl.strip(), variables, current_line_number)
-                            if status == STATUS_STOP:
-                                return None
+                    elif nested_block:
+                        status = _execute_block(nested_block, variables, base_indent, start_line_number + pc, functions)
+                        if status == STATUS_STOP:
+                            return None
                 pc = block_pc
 
             else:
@@ -453,7 +554,7 @@ def _execute_nested_if(lines, start_pc, variables, start_line_number=0):
     return pc
 
 
-def _execute_nested_for(lines, start_pc, variables, start_line_number=0):
+def _execute_nested_for(lines, start_pc, variables, start_line_number=0, functions=None):
     """Execute a nested for loop within a block.
 
     Returns the next line index after the loop, or None on stop.
@@ -461,6 +562,9 @@ def _execute_nested_for(lines, start_pc, variables, start_line_number=0):
     Raises:
         FireflyRuntimeError: If execution fails
     """
+    if functions is None:
+        functions = {}
+
     line = lines[start_pc]
     stripped = line.strip()
     base_indent = get_indent(line)
@@ -511,7 +615,7 @@ def _execute_nested_for(lines, start_pc, variables, start_line_number=0):
         # Execute the loop
         for value in iter_obj:
             variables[loop_var] = value
-            result = _execute_block(nested_block, variables, base_indent, start_line_number + block_pc)
+            result = _execute_block(nested_block, variables, base_indent, start_line_number + block_pc, functions)
             if result == STATUS_STOP:
                 return None
 
@@ -524,7 +628,7 @@ def _execute_nested_for(lines, start_pc, variables, start_line_number=0):
         raise FireflyRuntimeError(f"Error in nested for loop: {str(e)}", current_line_number)
 
 
-def _execute_nested_while(lines, start_pc, variables, start_line_number=0):
+def _execute_nested_while(lines, start_pc, variables, start_line_number=0, functions=None):
     """Execute a nested while loop within a block.
 
     Returns the next line index after the loop, or None on stop.
@@ -532,6 +636,9 @@ def _execute_nested_while(lines, start_pc, variables, start_line_number=0):
     Raises:
         FireflyRuntimeError: If execution fails
     """
+    if functions is None:
+        functions = {}
+
     line = lines[start_pc]
     stripped = line.strip()
     base_indent = get_indent(line)
@@ -576,7 +683,7 @@ def _execute_nested_while(lines, start_pc, variables, start_line_number=0):
                     current_line_number
                 )
 
-            result = _execute_block(nested_block, variables, base_indent, start_line_number + block_pc)
+            result = _execute_block(nested_block, variables, base_indent, start_line_number + block_pc, functions)
             if result == STATUS_STOP:
                 return None
             if result == STATUS_REPEAT:
@@ -591,7 +698,7 @@ def _execute_nested_while(lines, start_pc, variables, start_line_number=0):
         raise FireflyRuntimeError(f"Error in nested while loop: {str(e)}", current_line_number)
 
 
-def execute_if_block(lines, start_pc, variables):
+def execute_if_block(lines, start_pc, variables, functions=None):
     """Execute an if/else-if/else chain starting at start_pc.
 
     Returns the next program counter after the chain, or None on stop.
@@ -600,6 +707,9 @@ def execute_if_block(lines, start_pc, variables):
         FireflyRuntimeError: If execution fails
         FireflySyntaxError: If the syntax is invalid
     """
+    if functions is None:
+        functions = {}
+
     pc = start_pc
     executed = False  # Track if any branch has executed
 
@@ -616,12 +726,12 @@ def execute_if_block(lines, start_pc, variables):
                 if evaluate_expression(condition, variables, current_line_number):
                     executed = True
                     if inline_action:
-                        status = execute_line(inline_action, variables, current_line_number)
+                        status = execute_line(inline_action, variables, current_line_number, functions)
                         if status == STATUS_STOP:
                             return None
                     else:
                         for bl in block_lines:
-                            status = execute_line(bl, variables, current_line_number)
+                            status = execute_line(bl, variables, current_line_number, functions)
                             if status == STATUS_STOP:
                                 return None
                 pc = next_pc
@@ -635,12 +745,12 @@ def execute_if_block(lines, start_pc, variables):
                 if not executed and evaluate_expression(condition, variables, current_line_number):
                     executed = True
                     if inline_action:
-                        status = execute_line(inline_action, variables, current_line_number)
+                        status = execute_line(inline_action, variables, current_line_number, functions)
                         if status == STATUS_STOP:
                             return None
                     else:
                         for bl in block_lines:
-                            status = execute_line(bl, variables, current_line_number)
+                            status = execute_line(bl, variables, current_line_number, functions)
                             if status == STATUS_STOP:
                                 return None
                 pc = next_pc
@@ -655,12 +765,12 @@ def execute_if_block(lines, start_pc, variables):
                 if not executed:
                     executed = True
                     if inline_action:
-                        status = execute_line(inline_action, variables, current_line_number)
+                        status = execute_line(inline_action, variables, current_line_number, functions)
                         if status == STATUS_STOP:
                             return None
                     else:
                         for bl in block_lines:
-                            status = execute_line(bl, variables, current_line_number)
+                            status = execute_line(bl, variables, current_line_number, functions)
                             if status == STATUS_STOP:
                                 return None
                 pc = next_pc
