@@ -14,8 +14,8 @@ This runs `myScript.ff` - a number guessing game example.
 
 ### Run a Script
 Edit `main.py` and change the filename to run your script:
-```python
-interpreter.run_file('your_script.ff')
+```bash
+python3 main.py yourScript.ff
 ```
 
 ### Use as a Library
@@ -58,4 +58,4 @@ main.py              # Entry point
 ## Files
 
 - `myScript.ff` - Example guessing game script
-- `firefly.py` - Original single-file version (reference)
+
