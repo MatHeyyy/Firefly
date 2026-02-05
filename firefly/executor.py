@@ -2,7 +2,7 @@
 
 import re
 from .parser import (
-    STATUS_NEXT, STATUS_STOP, STATUS_REPEAT,
+    STATUS_NEXT, STATUS_STOP, STATUS_REPEAT, STATUS_RETURN,
     parse_input_statement, parse_math_shortcut, parse_assignment,
     parse_output_statement, parse_if_statement, parse_while_block, parse_for_block,
     parse_function_definition, parse_function_call
@@ -110,13 +110,36 @@ def execute_line(line, variables, line_number=None, functions=None):
 
         return STATUS_NEXT
 
+    # RETURN STATEMENT
+    if line.startswith("return "):
+        # Grab the math logic after the word "return"
+        expression = line[7:].strip()
+
+        # Evaluate it
+        value = evaluate_expression(expression, variables)
+
+        # Return a special tuple
+        return (STATUS_RETURN, value)
+
     # ASSIGNMENT
     parsed = parse_assignment(line)
     if parsed:
         _, name, value = parsed
         try:
-            result = evaluate_expression(value, variables, line_number)
-            variables[name] = result if result is not None else value
+            # Check if the right-hand side is a function call (contains " with " or ends with just function name)
+            if " with " in value or (value in functions if functions else False):
+                # Parse as function call
+                func_name, arg_values = parse_function_call(value)
+                if func_name in (functions or {}):
+                    result = execute_function(func_name, arg_values, functions, variables, line_number)
+                    variables[name] = result
+                else:
+                    # Not a known function, try regular expression
+                    result = evaluate_expression(value, variables, line_number)
+                    variables[name] = result if result is not None else value
+            else:
+                result = evaluate_expression(value, variables, line_number)
+                variables[name] = result if result is not None else value
         except (FireflyRuntimeError, FireflyVariableError) as e:
             # Re-raise with line number if not already set
             if e.line_number is None:
@@ -203,7 +226,7 @@ def execute_function(func_name, arg_values, functions, variables, line_number=No
 
     # Execute function body using _execute_block for proper control flow handling
     try:
-        _execute_block(body_lines, local_vars, base_indent, line_number or 0, functions)
+        result = _execute_block(body_lines, local_vars, base_indent, line_number or 0, functions)
     except (FireflyRuntimeError, FireflySyntaxError, FireflyVariableError) as e:
         if e.line_number is None:
             e.line_number = line_number
@@ -214,6 +237,12 @@ def execute_function(func_name, arg_values, functions, variables, line_number=No
     for var in variables:
         if var in local_vars and var not in arg_names:
             variables[var] = local_vars[var]
+
+    # Handle return value
+    if isinstance(result, tuple) and result[0] == STATUS_RETURN:
+        return result[1]
+
+    return None
 
 
 def execute_while_block(lines, start_pc, variables, functions=None):
@@ -393,18 +422,27 @@ def _execute_block(raw_lines, variables, parent_indent, start_line_number=0, fun
                 result = _execute_nested_if(raw_lines, pc, variables, start_line_number, functions)
                 if result is None:
                     return STATUS_STOP
+                # Handle return statement from nested if
+                if isinstance(result, tuple) and result[0] == STATUS_RETURN:
+                    return result
                 pc = result
             # Handle nested for loops
             elif stripped.startswith("for "):
                 result = _execute_nested_for(raw_lines, pc, variables, start_line_number, functions)
                 if result is None:
                     return STATUS_STOP
+                # Handle return statement from nested for
+                if isinstance(result, tuple) and result[0] == STATUS_RETURN:
+                    return result
                 pc = result
             # Handle nested while loops
             elif stripped.startswith("while "):
                 result = _execute_nested_while(raw_lines, pc, variables, start_line_number, functions)
                 if result is None:
                     return STATUS_STOP
+                # Handle return statement from nested while
+                if isinstance(result, tuple) and result[0] == STATUS_RETURN:
+                    return result
                 pc = result
             else:
                 status = execute_line(stripped, variables, current_line_number, functions)
@@ -412,6 +450,9 @@ def _execute_block(raw_lines, variables, parent_indent, start_line_number=0, fun
                     return STATUS_STOP
                 if status == STATUS_REPEAT:
                     return STATUS_REPEAT
+                # Handle return statement - propagate the tuple
+                if isinstance(status, tuple) and status[0] == STATUS_RETURN:
+                    return status
                 pc += 1
         except (FireflyRuntimeError, FireflySyntaxError, FireflyVariableError) as e:
             # Re-raise with line number if not already set
@@ -474,10 +515,16 @@ def _execute_nested_if(lines, start_pc, variables, start_line_number=0, function
                         status = execute_line(inline_action, variables, current_line_number, functions)
                         if status == STATUS_STOP:
                             return None
+                        # Handle return statement
+                        if isinstance(status, tuple) and status[0] == STATUS_RETURN:
+                            return status
                     elif nested_block:
                         status = _execute_block(nested_block, variables, base_indent, start_line_number + pc, functions)
                         if status == STATUS_STOP:
                             return None
+                        # Handle return statement
+                        if isinstance(status, tuple) and status[0] == STATUS_RETURN:
+                            return status
                 pc = block_pc
 
             # Handle 'else if' statement
@@ -504,10 +551,16 @@ def _execute_nested_if(lines, start_pc, variables, start_line_number=0, function
                         status = execute_line(inline_action, variables, current_line_number, functions)
                         if status == STATUS_STOP:
                             return None
+                        # Handle return statement
+                        if isinstance(status, tuple) and status[0] == STATUS_RETURN:
+                            return status
                     elif nested_block:
                         status = _execute_block(nested_block, variables, base_indent, start_line_number + pc, functions)
                         if status == STATUS_STOP:
                             return None
+                        # Handle return statement
+                        if isinstance(status, tuple) and status[0] == STATUS_RETURN:
+                            return status
                 pc = block_pc
 
             # Handle plain 'else'
@@ -536,10 +589,16 @@ def _execute_nested_if(lines, start_pc, variables, start_line_number=0, function
                         status = execute_line(inline_action, variables, current_line_number, functions)
                         if status == STATUS_STOP:
                             return None
+                        # Handle return statement
+                        if isinstance(status, tuple) and status[0] == STATUS_RETURN:
+                            return status
                     elif nested_block:
                         status = _execute_block(nested_block, variables, base_indent, start_line_number + pc, functions)
                         if status == STATUS_STOP:
                             return None
+                        # Handle return statement
+                        if isinstance(status, tuple) and status[0] == STATUS_RETURN:
+                            return status
                 pc = block_pc
 
             else:
@@ -618,6 +677,9 @@ def _execute_nested_for(lines, start_pc, variables, start_line_number=0, functio
             result = _execute_block(nested_block, variables, base_indent, start_line_number + block_pc, functions)
             if result == STATUS_STOP:
                 return None
+            # Handle return statement
+            if isinstance(result, tuple) and result[0] == STATUS_RETURN:
+                return result
 
         return block_pc
     except (FireflyRuntimeError, FireflySyntaxError, FireflyVariableError) as e:
@@ -686,6 +748,9 @@ def _execute_nested_while(lines, start_pc, variables, start_line_number=0, funct
             result = _execute_block(nested_block, variables, base_indent, start_line_number + block_pc, functions)
             if result == STATUS_STOP:
                 return None
+            # Handle return statement
+            if isinstance(result, tuple) and result[0] == STATUS_RETURN:
+                return result
             if result == STATUS_REPEAT:
                 continue
 

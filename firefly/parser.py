@@ -8,6 +8,7 @@ from .errors import FireflySyntaxError, FireflyIndentationError
 STATUS_NEXT = "NEXT"
 STATUS_STOP = "STOP"
 STATUS_REPEAT = "REPEAT"
+STATUS_RETURN = "RETURN"
 
 
 def parse_input_statement(line):
@@ -232,12 +233,16 @@ def parse_function_definition(line):
 def parse_function_call(line):
     """
         Parses: greet with Matei and Costinescu
+        or: greet with Matei, Costinescu
         Returns: (func_name, arg_values)
         """
     if " with " in line:
-        func_name, args_part = line.split(" with ")
-        # split arguments by " and "
-        arg_values = [val.strip() for val in args_part.split(" and ")]
+        func_name, args_part = line.split(" with ", 1)
+        # Support both " and " and ", " as argument separators
+        if " and " in args_part:
+            arg_values = [val.strip() for val in args_part.split(" and ")]
+        else:
+            arg_values = [val.strip() for val in args_part.split(",")]
         return func_name.strip(), arg_values
 
     # No arguments, just function name
