@@ -2,72 +2,64 @@
 
 from .errors import FireflyRuntimeError, FireflyTypeError, FireflyVariableError
 
+# Safe builtins allowed in expressions
+SAFE_BUILTINS = {
+    "range": range,
+    "len": len,
+    "abs": abs,
+    "min": min,
+    "max": max,
+    "sum": sum,
+    "int": int,
+    "float": float,
+    "str": str,
+    "bool": bool,
+    "list": list,
+    "True": True,
+    "False": False,
+}
 
-def evaluate_expression(expr, variables, line_number=None):
-    """
-    Evaluate a Firefly expression with variable substitution.
 
-    Args:
-        expr: The expression string to evaluate
-        variables: Dictionary of variable values
-        line_number: Optional line number for error reporting
-
-    Returns:
-        The result of the expression
-
-    Raises:
-        FireflyRuntimeError: If expression evaluation fails
-        FireflyTypeError: If the result is an unsupported type
-    """
+def _safe_eval(expr: str, variables: dict, line_number=None):
     if not expr or not isinstance(expr, str):
         raise FireflyTypeError(f"Invalid expression: {expr}", line_number)
 
+    try:
+        return eval(expr, {"__builtins__": SAFE_BUILTINS}, dict(variables))
+    except SyntaxError as e:
+        raise FireflyRuntimeError(f"Syntax error in expression '{expr}': {e}", line_number)
+    except NameError as e:
+        msg = str(e)
+        var_name = msg.split("'")[1] if "'" in msg else "unknown"
+        raise FireflyVariableError(f"Undefined variable '{var_name}' in expression '{expr}'", line_number)
+    except ZeroDivisionError:
+        raise FireflyRuntimeError(f"Division by zero in expression '{expr}'", line_number)
+    except (TypeError, ValueError) as e:
+        raise FireflyRuntimeError(f"Error evaluating expression '{expr}': {e}", line_number)
+    except Exception as e:
+        raise FireflyRuntimeError(f"Unexpected error evaluating expression '{expr}': {e}", line_number)
+
+
+def evaluate_expression(expr, variables, line_number=None):
     original_expr = expr
+    result = _safe_eval(expr, variables, line_number)
 
-    #Replace variables (Longest names first to avoid partial matches)
-    for var in sorted(variables.keys(), key=len, reverse=True):
-        if var in expr:
-            val = str(variables[var])
-            expr = expr.replace(var, val)
+    if isinstance(result, (int, float, str, bool)):
+        return result
 
-     #Fix Logic Syntax (single = becomes == for comparison)
-    if "=" in expr and "==" not in expr and "<=" not in expr and ">=" not in expr:
-        expr = expr.replace("=", "==")
+    raise FireflyTypeError(
+        f"Expression '{original_expr}' resulted in unsupported type: {type(result).__name__}",
+        line_number
+    )
+
+
+def evaluate_iterable(iterable_expr, variables, line_number=None):
+    original_expr = iterable_expr
+    result = _safe_eval(iterable_expr, variables, line_number)
 
     try:
-        #Evaluate with no builtins
-        result = eval(expr, {"__builtins__": {}}, {})
-        #Only allow simple types (int, float, str, bool) to be returned
-        if isinstance(result, (int, float, str, bool)):
-            return result
-        raise FireflyTypeError(
-            f"Expression '{original_expr}' resulted in unsupported type: {type(result).__name__}",
-            line_number
-        )
-    except SyntaxError as e:
-        raise FireflyRuntimeError(
-            f"Syntax error in expression '{original_expr}': {str(e)}",
-            line_number
-        )
-    except NameError as e:
-        # Extract variable name from error message
-        var_name = str(e).split("'")[1] if "'" in str(e) else "unknown"
-        raise FireflyVariableError(
-            f"Undefined variable '{var_name}' in expression '{original_expr}'",
-            line_number
-        )
-    except ZeroDivisionError:
-        raise FireflyRuntimeError(
-            f"Division by zero in expression '{original_expr}'",
-            line_number
-        )
-    except (TypeError, ValueError) as e:
-        raise FireflyRuntimeError(
-            f"Error evaluating expression '{original_expr}': {str(e)}",
-            line_number
-        )
-    except Exception as e:
-        raise FireflyRuntimeError(
-            f"Unexpected error evaluating expression '{original_expr}': {str(e)}",
-            line_number
-        )
+        iter(result)
+        return result
+    except TypeError:
+        raise FireflyRuntimeError(f"'{original_expr}' is not iterable in for loop", line_number)
+

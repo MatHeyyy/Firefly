@@ -7,7 +7,7 @@ from .parser import (
     parse_output_statement, parse_if_statement, parse_while_block, parse_for_block,
     parse_function_definition, parse_function_call
 )
-from .evaluator import evaluate_expression
+from .evaluator import evaluate_expression, evaluate_iterable
 from .utils import get_indent
 from .errors import FireflyRuntimeError, FireflyVariableError, FireflySyntaxError
 
@@ -332,21 +332,8 @@ def execute_for_block(lines, start_pc, variables, functions=None):
             raise FireflySyntaxError(f"Error parsing for loop: {str(e)}", start_pc + 1)
         raise
 
-    # Evaluate the iterable expression (e.g., range(1, 5))
-    try:
-        iter_obj = eval(iterable, {}, variables)
-        # Verify it's actually iterable
-        iter(iter_obj)
-    except TypeError:
-        raise FireflyRuntimeError(
-            f"'{iterable}' is not iterable in for loop",
-            start_pc + 1
-        )
-    except Exception as e:
-        raise FireflyRuntimeError(
-            f"Error evaluating iterable '{iterable}': {str(e)}",
-            start_pc + 1
-        )
+    # Evaluate the iterable expression (e.g., range(1, 5)) using safe evaluation
+    iter_obj = evaluate_iterable(iterable, variables, start_pc + 1)
 
     # Get the raw block lines (with indentation) from the original lines
     base_indent = get_indent(lines[start_pc])
@@ -656,20 +643,8 @@ def _execute_nested_for(lines, start_pc, variables, start_line_number=0, functio
             else:
                 break
 
-        # Evaluate the iterable
-        try:
-            iter_obj = eval(iterable, {}, variables)
-            iter(iter_obj)  # Verify it's iterable
-        except TypeError:
-            raise FireflyRuntimeError(
-                f"'{iterable}' is not iterable in for loop",
-                current_line_number
-            )
-        except Exception as e:
-            raise FireflyRuntimeError(
-                f"Error evaluating iterable '{iterable}': {str(e)}",
-                current_line_number
-            )
+        # Evaluate the iterable using safe evaluation
+        iter_obj = evaluate_iterable(iterable, variables, current_line_number)
 
         # Execute the loop
         for value in iter_obj:
