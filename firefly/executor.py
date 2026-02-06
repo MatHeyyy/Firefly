@@ -23,7 +23,7 @@ def execute_line(line, variables, line_number=None, functions=None):
         functions: Dictionary of user-defined functions
 
     Returns:
-        STATUS_NEXT, STATUS_STOP, or STATUS_REPEAT
+        STATUS_NEXT, STATUS_STOP, STATUS_RETURN or STATUS_REPEAT
 
     Raises:
         FireflyRuntimeError: If execution fails
@@ -398,7 +398,7 @@ def _execute_block(raw_lines, variables, parent_indent, start_line_number=0, fun
         functions: Dictionary of user-defined functions
 
     Returns:
-        STATUS_NEXT, STATUS_STOP, or STATUS_REPEAT
+        STATUS_NEXT, STATUS_STOP, STATUS_RETURN or STATUS_REPEAT
 
     Raises:
         FireflyRuntimeError: If execution fails
